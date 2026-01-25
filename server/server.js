@@ -2,9 +2,15 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import { clerkMiddleware, requireAuth } from '@clerk/express';
-import aiRouter from './routes/airoutes.js'; // Ensure casing matches your filename
+import aiRouter from './routes/airoutes.js'; 
+import connectCloudinary from './configs/cloudinary.js';
+// Ensure casing matches your filename
+console.log("DEBUG CHECK:");
+console.log("1. CLERK KEY:", process.env.CLERK_SECRET_KEY ? "✅ Loaded" : "❌ MISSING");
+console.log("2. GEMINI KEY:", process.env.GEMINI_API_KEY ? "✅ Loaded" : "❌ MISSING");
 
 const app = express();
+await connectCloudinary();
 
 // 1. Global Middleware
 app.use(cors());
