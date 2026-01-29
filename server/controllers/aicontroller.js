@@ -3,19 +3,37 @@ import sql from "../configs/db.js";
 import { clerkClient } from "@clerk/express";
 import { v2 as cloudinary } from 'cloudinary';
 import axios from "axios";
-import FormData from "form-data"; 
+import FormData from "form-data";
+import fs from "fs";
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pdf = require('pdf-parse');
 
 // Initialize Google AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-const handleUsageAndDb = async (userId, prompt, content, type, plan, free_usage, publish = false) => {
-    await sql`INSERT INTO creations (user_id, prompt, content, type, publish) 
-              VALUES (${userId}, ${prompt}, ${content}, ${type}, ${publish})`;
-
-    if (plan !== 'premium') {
-        await clerkClient.users.updateUserMetadata(userId, {
-            privateMetadata: { free_usage: free_usage + 1 }
+// Helper: cleanup uploaded file to save disk space
+const cleanupFile = (path) => {
+    if (path && fs.existsSync(path)) {
+        fs.unlink(path, (err) => {
+            if (err) console.error("Error deleting file:", err);
         });
+    }
+};
+
+// Centralized Usage and DB Handler
+const handleUsageAndDb = async (userId, prompt, content, type, plan, free_usage, publish = false) => {
+    try {
+        await sql`INSERT INTO creations (user_id, prompt, content, type, publish) 
+                  VALUES (${userId}, ${prompt}, ${content}, ${type}, ${publish})`;
+
+        if (plan !== 'premium') {
+            await clerkClient.users.updateUserMetadata(userId, {
+                privateMetadata: { free_usage: free_usage + 1 }
+            });
+        }
+    } catch (error) {
+        console.error("DB/Usage Update Error:", error);
     }
 };
 
@@ -68,7 +86,7 @@ export const generateBlogTitle = async (req, res) => {
 // 3. Image Generation
 export const generateImage = async (req, res) => {
     try {
-        const { userId } = req.auth(); 
+        const { userId } = req.auth();
         const { prompt, publish } = req.body;
         const plan = req.plan;
         const free_usage = req.free_usage || 0;
@@ -96,30 +114,24 @@ export const generateImage = async (req, res) => {
 
     } catch (error) {
         console.error("Image Error:", error.message);
-        if (error.response) {
-            console.error("ClipDrop Error Details:", error.response.data.toString());
-        }
         res.status(500).json({ success: false, message: error.message || "Image generation failed" });
     }
 };
 
 // 4. Remove Image Background
 export const removeImageBackground = async (req, res) => {
+    const image = req.file;
     try {
         const { userId } = req.auth();
-        
-        // FIX 1: req.file is the file object, don't destructure it
-        const image = req.file; 
-        
         const plan = req.plan;
         const free_usage = req.free_usage || 0;
-        
-        // FIX 2: Define 'publish' (extracted from request body)
-        const { publish } = req.body; 
+        const { publish } = req.body;
 
         if (plan !== 'premium' && free_usage >= 10) {
-            return res.json({ success: false, message: "This feature is only available for premium users." });
+            return res.json({ success: false, message: "Limit reached or Premium only." });
         }
+        
+        if (!image) return res.status(400).json({ success: false, message: "No image uploaded" });
 
         const { secure_url } = await cloudinary.uploader.upload(image.path, {
             transformation: [
@@ -128,16 +140,99 @@ export const removeImageBackground = async (req, res) => {
                     background_removal: 'remove_the_background'
                 }
             ]
-        })
-        
-        // FIX 3: Added 'publish' to the column list so it matches the 5 values
-        await sql`INSERT INTO creations (user_id, prompt, content, type, publish) VALUES (${userId}, 'Removed Background from image', ${secure_url}, ${'image'}, ${publish ?? false})`;
+        });
 
+        await handleUsageAndDb(userId, 'Removed Background', secure_url, 'image', plan, free_usage, publish);
+        
         res.json({ success: true, secure_url });
 
     } catch (error) {
         console.error("Remove BG Error:", error.message);
-        // Cleaned up the error logging since ClipDrop is no longer used
-        res.status(500).json({ success: false, message: error.message || "Background removal failed" });
+        res.status(500).json({ success: false, message: error.message });
+    } finally {
+        if(image) cleanupFile(image.path);
+    }
+};
+
+// 5. Remove Object
+export const removeImageObject = async (req, res) => {
+    const image = req.file;
+    try {
+        const { userId } = req.auth();
+        const plan = req.plan;
+        const free_usage = req.free_usage || 0;
+        
+        // Extracted 'object' from body to fix the ReferenceError
+        const { publish, object } = req.body; 
+
+        if (plan !== 'premium' && free_usage >= 10) {
+            return res.json({ success: false, message: "Limit reached or Premium only." });
+        }
+        
+        if (!image) return res.status(400).json({ success: false, message: "No image uploaded" });
+        if (!object) return res.status(400).json({ success: false, message: "No object specified to remove" });
+
+        const { public_id } = await cloudinary.uploader.upload(image.path);
+
+        const imageurl = cloudinary.url(public_id, {
+            transformation: [
+                {
+                    effect: `gen_remove:prompt_${object}`
+                }
+            ],
+            resource_type: 'image'
+        });
+
+        await handleUsageAndDb(userId, `Removed ${object} from image`, imageurl, 'image', plan, free_usage, publish);
+
+        res.json({ success: true, imageurl });
+
+    } catch (error) {
+        console.error("Remove Object Error:", error.message);
+        res.status(500).json({ success: false, message: error.message });
+    } finally {
+        if(image) cleanupFile(image.path);
+    }
+};
+
+// 6. Resume Review
+export const resumeReview = async (req, res) => {
+    const resume = req.file;
+    try {
+        const { userId } = req.auth();
+        const plan = req.plan;
+        const free_usage = req.free_usage || 0;
+        const { publish } = req.body;
+
+        if (plan !== 'premium' && free_usage >= 10) {
+            return res.json({ success: false, message: "Limit reached or Premium only." });
+        }
+
+        if (!resume) return res.status(400).json({ success: false, message: "No file uploaded" });
+
+        // Fixed size limit: 5MB
+        if (resume.size > 5 * 1024 * 1024) {
+            return res.json({ success: false, message: "Resume file size exceeds allowed size (5MB)" });
+        }
+
+        const dataBuffer = fs.readFileSync(resume.path);
+        const pdfData = await pdf(dataBuffer);
+
+        // Fixed template literal syntax (replaced single quotes with backticks)
+        const prompt = `Review the following resume and provide constructive feedback on its strength, weaknesses, and areas for improvement: \n\n${pdfData.text}`;
+
+        // Using gemini-2.5-flash as requested
+        const response = await genAI.getGenerativeModel({ model: "gemini-2.5-flash" }).generateContent(prompt);
+        const reviewContent = response.response.text();
+
+        await handleUsageAndDb(userId, 'Resume Review', reviewContent, 'resume', plan, free_usage, publish);
+
+        res.json({ success: true, content: reviewContent });
+
+    } catch (error) {
+        console.error("Resume Review Error:", error.message);
+        res.status(500).json({ success: false, message: error.message });
+    } finally {
+        if(resume) cleanupFile(resume.path);
     }
 };

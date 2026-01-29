@@ -1,9 +1,19 @@
 import express from 'express';
 import { auth } from '../middlewares/auth.js';
-import { generateArticle, generateBlogTitle, generateImage } from '../controllers/aicontroller.js';
-const aiRouter=express.Router();
-aiRouter.post('/generate-article',auth,generateArticle)
-aiRouter.post('/generate-blog-title',auth,generateBlogTitle)
-aiRouter.post('/generate-image',auth,generateImage)
-aiRouter.post('/remove-background',auth,removeImageBackground)
+import { generateArticle, generateBlogTitle, generateImage, resumeReview, removeImageBackground, removeImageObject } from '../controllers/aicontroller.js';
+import { upload } from '../configs/multer.js';
+
+const aiRouter = express.Router();
+
+aiRouter.post('/generate-article', auth, generateArticle);
+aiRouter.post('/generate-blog-title', auth, generateBlogTitle);
+aiRouter.post('/generate-image', auth, generateImage);
+
+
+aiRouter.post('/remove-image-background', auth, upload.single('image'), removeImageBackground);
+aiRouter.post('/remove-image-object', auth, upload.single('image'), removeImageObject);
+
+
+aiRouter.post('/resume-review', auth, upload.single('pdf'), resumeReview);
+    
 export default aiRouter;
