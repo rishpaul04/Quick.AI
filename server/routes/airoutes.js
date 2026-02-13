@@ -14,6 +14,6 @@ aiRouter.post('/remove-image-background', auth, upload.single('image'), removeIm
 aiRouter.post('/remove-image-object', auth, upload.single('image'), removeImageObject);
 
 
-aiRouter.post('/resume-review', auth, upload.single('pdf'), resumeReview);
+aiRouter.post('/resume-review', auth, upload.single('resume'), resumeReview);
     
 export default aiRouter;

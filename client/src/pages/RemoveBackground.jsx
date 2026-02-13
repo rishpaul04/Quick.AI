@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
-import { Sparkles, Eraser, Loader2, Hand, Image as ImageIcon } from 'lucide-react';
+import { Sparkles, Eraser, Loader2, Hand, Image as ImageIcon, Download } from 'lucide-react';
+import axios from 'axios';
+import { useAuth } from '@clerk/clerk-react';
+import toast from 'react-hot-toast';
+
+const BASE_URL = import.meta.env.VITE_BASE_URL;
 
 const BackgroundRemoval = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [processedImage, setProcessedImage] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const { getToken } = useAuth();
 
   // Handle file selection
   const handleFileChange = (e) => {
@@ -18,19 +25,63 @@ const BackgroundRemoval = () => {
     }
   };
 
-  // Mock function - No real AI, just UI simulation
-  const handleRemoveBackground = () => {
-    if (!selectedFile) return;
+  // Actual API Integration
+  const handleRemoveBackground = async () => {
+    if (!selectedFile) {
+      toast.error("Please upload an image first.");
+      return;
+    }
 
-    setIsProcessing(true);
-    
-    // Simulate a 2-second delay to show the loading state
-    setTimeout(() => {
+    try {
+      setIsProcessing(true);
+      const token = await getToken();
+
+      // We must use FormData to send files to the server
+      const formData = new FormData();
+      formData.append('image', selectedFile);
+
+      // Make sure this endpoint matches your backend route
+      const { data } = await axios.post(`${BASE_URL}/api/ai/remove-image-background`, 
+        formData, 
+        { 
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data' // Required for file uploads
+          } 
+        }
+      );
+
+      // Using secure_url based on your previous Cloudinary setup
+      if (data.success && (data.secure_url || data.imageUrl)) {
+        setProcessedImage(data.secure_url || data.imageUrl);
+        toast.success("Background removed successfully!");
+      } else {
+        toast.error(data.message || "Failed to process image.");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Server connection error.");
+    } finally {
       setIsProcessing(false);
-      // In a real app, the API result would go here.
-      // For now, we just show the original image again to simulate a result.
-      setProcessedImage(previewUrl); 
-    }, 2000);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!processedImage) return;
+    try {
+      const response = await fetch(processedImage);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Transparent_Image_${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      window.open(processedImage, '_blank');
+    }
   };
 
   return (
@@ -40,29 +91,33 @@ const BackgroundRemoval = () => {
         {/* --- Left Panel: Upload Configuration --- */}
         <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 h-fit">
           
-          {/* Header */}
           <div className="flex items-center gap-2 mb-6">
             <Sparkles className="w-5 h-5 text-[#FF5A1A]" />
             <h2 className="text-lg font-semibold text-gray-800">Background Removal</h2>
           </div>
 
-          {/* File Input */}
           <div className="mb-8">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Upload image
             </label>
             <input 
               type="file" 
-              accept="image/*"
+              accept="image/png, image/jpeg, image/jpg, image/webp"
               onChange={handleFileChange}
               className="w-full text-sm text-gray-500 border border-gray-300 rounded-lg p-2 bg-white file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 cursor-pointer"
             />
             <p className="mt-2 text-xs text-gray-400">
-              Supports JPG, PNG, and other image formats
+              Supports JPG, PNG, and WebP formats
             </p>
           </div>
 
-          {/* Action Button (Orange Gradient) */}
+          {/* Show a mini preview of the uploaded image before processing */}
+          {previewUrl && !processedImage && (
+            <div className="mb-6 rounded-lg overflow-hidden border border-gray-200 bg-gray-50 flex justify-center p-2 max-h-[200px]">
+               <img src={previewUrl} alt="Preview" className="max-h-full object-contain opacity-70" />
+            </div>
+          )}
+
           <button 
             onClick={handleRemoveBackground}
             disabled={!selectedFile || isProcessing}
@@ -80,26 +135,33 @@ const BackgroundRemoval = () => {
         {/* --- Right Panel: Result Display --- */}
         <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 flex flex-col min-h-[500px]">
           
-          {/* Header */}
-          <div className="flex items-center gap-2 mb-6">
-            <Eraser className="w-5 h-5 text-[#FF5A1A]" />
-            <h2 className="text-lg font-semibold text-gray-800">Processed Image</h2>
+          <div className="flex items-center justify-between border-b pb-4 mb-6">
+            <div className="flex items-center gap-2">
+              <Eraser className="w-5 h-5 text-[#FF5A1A]" />
+              <h2 className="text-lg font-semibold text-gray-800">Processed Image</h2>
+            </div>
+            {processedImage && !isProcessing && (
+              <button 
+                onClick={handleDownload}
+                className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-[#FF5A1A] transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                Download
+              </button>
+            )}
           </div>
 
-          {/* Content Area */}
           <div className="flex-1 flex flex-col items-center justify-center rounded-xl relative overflow-hidden">
              
              {isProcessing ? (
-               // State 1: Loading
                <div className="text-center">
                  <Loader2 className="w-10 h-10 text-[#FF5A1A] animate-spin mx-auto mb-3" />
                  <p className="text-gray-500 font-medium text-sm">Processing image...</p>
                </div>
              ) : processedImage ? (
-               // State 2: Result Shown
-               <div className="relative w-full h-full flex items-center justify-center p-4 bg-slate-50 rounded-lg border border-dashed border-gray-200">
+               <div className="relative w-full h-full flex items-center justify-center p-4 bg-slate-50 rounded-lg border border-dashed border-gray-200 animate-in fade-in zoom-in-95 duration-500">
                  {/* Checkerboard background to imply transparency */}
-                 <div className="absolute inset-0 opacity-10" 
+                 <div className="absolute inset-0 opacity-10 rounded-lg" 
                       style={{
                         backgroundImage: `linear-gradient(45deg, #000 25%, transparent 25%), linear-gradient(-45deg, #000 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #000 75%), linear-gradient(-45deg, transparent 75%, #000 75%)`,
                         backgroundSize: '20px 20px',
@@ -113,7 +175,6 @@ const BackgroundRemoval = () => {
                  />
                </div>
              ) : (
-               // State 3: Empty Placeholder (Matches Screenshot)
                <div className="flex flex-col items-center text-center opacity-40">
                  <div className="flex items-end justify-center mb-4 gap-2">
                     <Hand className="w-10 h-10 text-gray-500 -mb-2" />

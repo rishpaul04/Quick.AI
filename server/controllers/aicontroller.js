@@ -9,6 +9,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pdf = require('pdf-parse');
 
+
 // Initialize Google AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -118,11 +119,11 @@ export const generateImage = async (req, res) => {
     }
 };
 
-// 4. Remove Image Background
 export const removeImageBackground = async (req, res) => {
     const image = req.file;
+
     try {
-        const { userId } = req.auth();
+        const { userId } = req.auth;
         const plan = req.plan;
         const free_usage = req.free_usage || 0;
         const { publish } = req.body;
@@ -130,76 +131,102 @@ export const removeImageBackground = async (req, res) => {
         if (plan !== 'premium' && free_usage >= 10) {
             return res.json({ success: false, message: "Limit reached or Premium only." });
         }
-        
-        if (!image) return res.status(400).json({ success: false, message: "No image uploaded" });
 
-        const { secure_url } = await cloudinary.uploader.upload(image.path, {
-            transformation: [
+        if (!image) {
+            return res.status(400).json({ success: false, message: "No image uploaded" });
+        }
+
+        // 1. Upload the raw image to Cloudinary
+        const result = await new Promise((resolve, reject) => {
+            const uploadStream = cloudinary.uploader.upload_stream(
                 {
-                    effect: 'background_removal',
-                    background_removal: 'remove_the_background'
+                    background_removal: "cloudinary_ai"
+                },
+                (error, result) => {
+                    if (error) reject(error);
+                    else resolve(result);
                 }
-            ]
+            );
+            uploadStream.end(image.buffer);
         });
 
-        await handleUsageAndDb(userId, 'Removed Background', secure_url, 'image', plan, free_usage, publish);
-        
-        res.json({ success: true, secure_url });
+        // 2. THE BULLETPROOF FIX: Manually inject the transformation into the URL string
+        let transparent_url = result.secure_url;
+
+        // Inject the 'e_background_removal' effect right after '/upload/'
+        transparent_url = transparent_url.replace('/upload/', '/upload/e_background_removal/');
+
+        // Force the file extension to be .png so it supports transparency
+        transparent_url = transparent_url.replace(/\.(jpg|jpeg|webp)$/i, '.png');
+
+        // Log to database
+        await handleUsageAndDb(userId, 'Removed Background', transparent_url, 'image', plan, free_usage, publish);
+
+        // Send the completely formatted URL back to React!
+        res.json({ success: true, secure_url: transparent_url });
 
     } catch (error) {
         console.error("Remove BG Error:", error.message);
-        res.status(500).json({ success: false, message: error.message });
-    } finally {
-        if(image) cleanupFile(image.path);
+        res.status(500).json({ success: false, message: "Failed to process image." });
     }
 };
-
-// 5. Remove Object
 export const removeImageObject = async (req, res) => {
     const image = req.file;
+
     try {
-        const { userId } = req.auth();
+        const { userId } = req.auth;
         const plan = req.plan;
         const free_usage = req.free_usage || 0;
-        
-        // Extracted 'object' from body to fix the ReferenceError
-        const { publish, object } = req.body; 
+
+        // We are using 'object' here to match your frontend fix!
+        const { publish, object } = req.body;
 
         if (plan !== 'premium' && free_usage >= 10) {
             return res.json({ success: false, message: "Limit reached or Premium only." });
         }
-        
+
+        // 1. Validate inputs
         if (!image) return res.status(400).json({ success: false, message: "No image uploaded" });
         if (!object) return res.status(400).json({ success: false, message: "No object specified to remove" });
 
-        const { public_id } = await cloudinary.uploader.upload(image.path);
+        // 2. THE FIX: Convert Multer memory buffer to Base64 string
+        // This completely bypasses the need for image.path!
+        const b64 = Buffer.from(image.buffer).toString("base64");
+        const dataURI = `data:${image.mimetype};base64,${b64}`;
 
-        const imageurl = cloudinary.url(public_id, {
-            transformation: [
-                {
-                    effect: `gen_remove:prompt_${object}`
-                }
-            ],
-            resource_type: 'image'
+        // 3. Upload the Base64 string directly to Cloudinary
+        const uploadResult = await cloudinary.uploader.upload(dataURI, {
+            resource_type: "image"
         });
 
-        await handleUsageAndDb(userId, `Removed ${object} from image`, imageurl, 'image', plan, free_usage, publish);
+        // 4. Apply Cloudinary's Generative Remove via the URL string
+        const imageUrl = cloudinary.url(uploadResult.public_id, {
+            secure: true,
+            effect: `gen_remove:prompt_${object}`
+        });
 
-        res.json({ success: true, imageurl });
+        // 5. Log to database
+        await handleUsageAndDb(userId, `Removed ${object} from image`, imageUrl, 'image', plan, free_usage, publish);
+
+        // 6. Send the generated URL back to React
+        res.json({ success: true, secure_url: imageUrl });
 
     } catch (error) {
         console.error("Remove Object Error:", error.message);
-        res.status(500).json({ success: false, message: error.message });
-    } finally {
-        if(image) cleanupFile(image.path);
+        // Sending error.message helps us see Cloudinary's exact complaints on the frontend
+        res.status(400).json({ success: false, message: error.message });
     }
 };
 
 // 6. Resume Review
+
+
 export const resumeReview = async (req, res) => {
     const resume = req.file;
+
     try {
-        const { userId } = req.auth();
+        // FIX 1: Clerk auth is an object, not a function
+        const { userId } = req.auth;
         const plan = req.plan;
         const free_usage = req.free_usage || 0;
         const { publish } = req.body;
@@ -210,29 +237,53 @@ export const resumeReview = async (req, res) => {
 
         if (!resume) return res.status(400).json({ success: false, message: "No file uploaded" });
 
-        // Fixed size limit: 5MB
         if (resume.size > 5 * 1024 * 1024) {
             return res.json({ success: false, message: "Resume file size exceeds allowed size (5MB)" });
         }
 
-        const dataBuffer = fs.readFileSync(resume.path);
-        const pdfData = await pdf(dataBuffer);
+        // FIX 2: Support Multer memoryStorage (buffer) or diskStorage (path) safely
+        const dataBuffer = resume.buffer ? resume.buffer : fs.readFileSync(resume.path);
 
-        // Fixed template literal syntax (replaced single quotes with backticks)
-        const prompt = `Review the following resume and provide constructive feedback on its strength, weaknesses, and areas for improvement: \n\n${pdfData.text}`;
+        // Extract text from the PDF
+        
+        const pdfData = await parse(dataBuffer);
 
-        // Using gemini-2.5-flash as requested
+        // FIX 3: Force Gemini to output strict JSON matching our React State
+        const prompt = `
+        You are an expert ATS resume reviewer and career coach. Review the following resume text and provide constructive feedback. 
+        
+        You MUST respond ONLY with a valid JSON object using the exact structure below. Do not add markdown formatting or extra conversational text.
+        {
+            "score": <number between 1 and 100 representing overall quality>,
+            "summary": "<A detailed overall summary of the resume's strength>",
+            "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
+            "improvements": ["<improvement 1>", "<improvement 2>", "<improvement 3>"]
+        }
+        
+        Resume Text:
+        ${pdfData.text}
+        `;
+
         const response = await genAI.getGenerativeModel({ model: "gemini-2.5-flash" }).generateContent(prompt);
-        const reviewContent = response.response.text();
+        let reviewContent = response.response.text();
 
-        await handleUsageAndDb(userId, 'Resume Review', reviewContent, 'resume', plan, free_usage, publish);
+        // FIX 4: Clean the response in case Gemini wraps it in ```json ... ``` markdown
+        reviewContent = reviewContent.replace(/```json/g, '').replace(/```/g, '').trim();
 
-        res.json({ success: true, content: reviewContent });
+        // Parse the string into an actual JavaScript object
+        const analysisData = JSON.parse(reviewContent);
+
+        // Save to Database (I stringified analysisData so it saves nicely in your DB text column)
+        await handleUsageAndDb(userId, 'Resume Review', JSON.stringify(analysisData), 'resume', plan, free_usage, publish);
+
+        // FIX 5: Send back the 'analysis' object exactly as React expects it!
+        res.json({ success: true, analysis: analysisData });
 
     } catch (error) {
         console.error("Resume Review Error:", error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: "Failed to analyze resume." });
     } finally {
-        if(resume) cleanupFile(resume.path);
+        // Safe cleanup: Only try to delete if a physical path actually exists
+        if (resume && resume.path) cleanupFile(resume.path);
     }
 };

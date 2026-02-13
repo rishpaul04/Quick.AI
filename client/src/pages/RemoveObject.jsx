@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
-import { Sparkles, Scissors, Loader2 } from 'lucide-react';
+import { Sparkles, Scissors, Loader2, Download } from 'lucide-react';
+import axios from 'axios';
+import { useAuth } from '@clerk/clerk-react';
+import toast from 'react-hot-toast';
+
+const BASE_URL = import.meta.env.VITE_BASE_URL;
 
 const ObjectRemoval = () => {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -7,6 +12,8 @@ const ObjectRemoval = () => {
   const [prompt, setPrompt] = useState('');
   const [processedImage, setProcessedImage] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const { getToken } = useAuth();
 
   // Handle file selection
   const handleFileChange = (e) => {
@@ -18,18 +25,70 @@ const ObjectRemoval = () => {
     }
   };
 
-  // Mock processing function
-  const handleRemoveObject = () => {
-    if (!selectedFile || !prompt) return;
+  // Actual API Integration
+  const handleRemoveObject = async () => {
+    if (!selectedFile) {
+      toast.error("Please upload an image first.");
+      return;
+    }
+    if (!prompt.trim()) {
+      toast.error("Please describe what to remove.");
+      return;
+    }
 
-    setIsProcessing(true);
-    
-    // Simulate processing delay
-    setTimeout(() => {
+    try {
+      setIsProcessing(true);
+      const token = await getToken();
+
+      // We use FormData because we are uploading a file AND sending text
+      const formData = new FormData();
+      formData.append('image', selectedFile);
+      formData.append('object', prompt);
+
+      // Make sure this endpoint matches your backend route
+      const { data } = await axios.post(`${BASE_URL}/api/ai/remove-image-object`, 
+        formData, 
+        { 
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          } 
+        }
+      );
+
+      // Look for secure_url (Cloudinary) or imageUrl
+      if (data.success && (data.secure_url || data.imageUrl)) {
+        setProcessedImage(data.secure_url || data.imageUrl);
+        toast.success("Object removed successfully!");
+      } else {
+        toast.error(data.message || "Failed to process image.");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Server connection error.");
+    } finally {
       setIsProcessing(false);
-      // For demo, we just show the original image again
-      setProcessedImage(previewUrl); 
-    }, 2000);
+    }
+  };
+
+  // Handle downloading the processed image
+  const handleDownload = async () => {
+    if (!processedImage) return;
+    try {
+      const response = await fetch(processedImage);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Object_Removed_${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      // Fallback if CORS prevents blob fetching
+      window.open(processedImage, '_blank');
+    }
   };
 
   return (
@@ -52,11 +111,18 @@ const ObjectRemoval = () => {
             </label>
             <input 
               type="file" 
-              accept="image/*"
+              accept="image/png, image/jpeg, image/jpg, image/webp"
               onChange={handleFileChange}
               className="w-full text-sm text-gray-500 border border-gray-300 rounded-lg p-2 bg-white file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 cursor-pointer"
             />
           </div>
+
+          {/* Show a mini preview of the uploaded image before processing */}
+          {previewUrl && !processedImage && (
+            <div className="mb-6 rounded-lg overflow-hidden border border-gray-200 bg-gray-50 flex justify-center p-2 max-h-[200px]">
+               <img src={previewUrl} alt="Preview" className="max-h-full object-contain opacity-70" />
+            </div>
+          )}
 
           {/* Description Input */}
           <div className="mb-8">
@@ -65,13 +131,13 @@ const ObjectRemoval = () => {
             </label>
             <textarea
               rows={3}
-              placeholder="e.g., car in background, tree from the image"
+              placeholder="e.g., car in background, person on the right, dog..."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5044E5] focus:border-transparent text-sm resize-none"
             />
             <p className="mt-2 text-xs text-gray-400">
-              Be specific about what you want to remove
+              Be specific about what you want to remove.
             </p>
           </div>
 
@@ -94,9 +160,20 @@ const ObjectRemoval = () => {
         <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 flex flex-col min-h-[500px]">
           
           {/* Header */}
-          <div className="flex items-center gap-2 mb-6">
-            <Scissors className="w-5 h-5 text-[#5044E5]" />
-            <h2 className="text-lg font-semibold text-gray-800">Processed Image</h2>
+          <div className="flex items-center justify-between border-b pb-4 mb-6">
+            <div className="flex items-center gap-2">
+              <Scissors className="w-5 h-5 text-[#5044E5]" />
+              <h2 className="text-lg font-semibold text-gray-800">Processed Image</h2>
+            </div>
+            {processedImage && !isProcessing && (
+              <button 
+                onClick={handleDownload}
+                className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-[#5044E5] transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                Download
+              </button>
+            )}
           </div>
 
           {/* Canvas Area */}
@@ -110,7 +187,7 @@ const ObjectRemoval = () => {
                </div>
              ) : processedImage ? (
                // Success State
-               <div className="relative w-full h-full flex items-center justify-center p-4 bg-slate-50 rounded-lg border border-dashed border-gray-200">
+               <div className="relative w-full h-full flex items-center justify-center p-4 bg-slate-50 rounded-lg border border-dashed border-gray-200 animate-in fade-in zoom-in-95 duration-500">
                  <img 
                    src={processedImage} 
                    alt="Object Removed" 
@@ -118,7 +195,7 @@ const ObjectRemoval = () => {
                  />
                </div>
              ) : (
-               // Empty State (Matches Screenshot)
+               // Empty State
                <div className="flex flex-col items-center text-center opacity-40">
                  <Scissors className="w-12 h-12 text-gray-400 mb-4" />
                  <p className="text-sm text-gray-500 font-medium max-w-[250px]">

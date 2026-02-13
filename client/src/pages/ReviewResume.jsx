@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
-import { Sparkles, FileText, Loader2, Upload } from 'lucide-react';
+import { useAuth } from '@clerk/clerk-react';
+import axios from 'axios';
+import { FileText, Loader2, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import toast from 'react-hot-toast';
+
+const BASE_URL = import.meta.env.VITE_BASE_URL;
 
 const ResumeReview = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const { getToken } = useAuth();
 
   // Handle file selection
   const handleFileChange = (e) => {
@@ -15,23 +22,45 @@ const ResumeReview = () => {
     }
   };
 
-  // Mock processing function
-  const handleReviewResume = () => {
-    if (!selectedFile) return;
+  // Actual API Integration
+  const handleReviewResume = async () => {
+    if (!selectedFile) {
+      toast.error("Please upload a resume first.");
+      return;
+    }
 
-    setIsProcessing(true);
-    
-    // Simulate AI analysis delay
-    setTimeout(() => {
+    try {
+      setIsProcessing(true);
+      const token = await getToken();
+
+      // We must use FormData to send files to the server
+      const formData = new FormData();
+      formData.append('resume', selectedFile);
+
+      // Make sure this endpoint matches your backend route
+      const { data } = await axios.post(`${BASE_URL}/api/ai/resume-review`, 
+        formData, 
+        { 
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data' // Required for file uploads
+          } 
+        }
+      );
+
+      // Expecting the backend to return: { success: true, analysis: { score: 85, summary: "...", strengths: [], improvements: [] } }
+      if (data.success && data.analysis) {
+        setAnalysisResult(data.analysis);
+        toast.success("Resume analyzed successfully!");
+      } else {
+        toast.error(data.message || "Failed to analyze resume.");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Server connection error.");
+    } finally {
       setIsProcessing(false);
-      // Mock Analysis Result
-      setAnalysisResult({
-        score: 85,
-        summary: "Strong resume with clear experience. Good use of action verbs.",
-        strengths: ["Clear formatting", "Quantifiable achievements", "Relevant skills highlighted"],
-        improvements: ["Add a summary section", "Include more soft skills", "Check for minor typos"]
-      });
-    }, 2000);
+    }
   };
 
   return (
@@ -59,7 +88,7 @@ const ResumeReview = () => {
               className="w-full text-sm text-gray-500 border border-gray-300 rounded-lg p-2 bg-white file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 cursor-pointer"
             />
             <p className="mt-2 text-xs text-gray-400">
-              Supports PDF, PNG, JPG formats
+              Supports PDF, DOCX, PNG, JPG formats
             </p>
           </div>
 
@@ -97,12 +126,12 @@ const ResumeReview = () => {
                  <p className="text-gray-500 font-medium text-sm">Scanning document...</p>
                </div>
              ) : analysisResult ? (
-               // Success State (Mock Result)
+               // Success State
                <div className="w-full text-left space-y-6 animate-in fade-in">
                  
                  {/* Score Card */}
                  <div className="p-4 bg-teal-50 border border-teal-100 rounded-lg flex items-center gap-4">
-                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-teal-700 font-bold border-2 border-teal-200">
+                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-teal-700 font-bold border-2 border-teal-200 flex-shrink-0">
                         {analysisResult.score}
                     </div>
                     <div>
@@ -115,10 +144,10 @@ const ResumeReview = () => {
                  <div>
                     <h3 className="text-sm font-semibold text-gray-700 mb-2">Strengths</h3>
                     <ul className="space-y-2">
-                        {analysisResult.strengths.map((item, i) => (
-                            <li key={i} className="flex items-center gap-2 text-sm text-gray-600">
-                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                                {item}
+                        {analysisResult.strengths?.map((item, i) => (
+                            <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                                <span className="w-1.5 h-1.5 mt-1.5 bg-green-500 rounded-full flex-shrink-0"></span>
+                                <span>{item}</span>
                             </li>
                         ))}
                     </ul>
@@ -128,17 +157,17 @@ const ResumeReview = () => {
                  <div>
                     <h3 className="text-sm font-semibold text-gray-700 mb-2">Improvements Needed</h3>
                     <ul className="space-y-2">
-                        {analysisResult.improvements.map((item, i) => (
-                            <li key={i} className="flex items-center gap-2 text-sm text-gray-600">
-                                <span className="w-1.5 h-1.5 bg-red-400 rounded-full"></span>
-                                {item}
+                        {analysisResult.improvements?.map((item, i) => (
+                            <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                                <span className="w-1.5 h-1.5 mt-1.5 bg-red-400 rounded-full flex-shrink-0"></span>
+                                <span>{item}</span>
                             </li>
                         ))}
                     </ul>
                  </div>
                </div>
              ) : (
-               // Empty State (Matches Screenshot)
+               // Empty State
                <div className="flex flex-col items-center text-center opacity-40">
                  <FileText className="w-16 h-16 text-gray-300 mb-4" strokeWidth={1.5} />
                  <p className="text-sm text-gray-500 font-medium max-w-[250px]">
