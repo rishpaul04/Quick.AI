@@ -7,7 +7,7 @@ import FormData from "form-data";
 import fs from "fs";
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const pdf = require('pdf-parse');
+import pdf from "pdf-parse-fork";
 
 
 // Initialize Google AI
@@ -226,7 +226,7 @@ export const resumeReview = async (req, res) => {
 
     try {
         // FIX 1: Clerk auth is an object, not a function
-        const { userId } = req.auth;
+        const { userId } = req.auth();
         const plan = req.plan;
         const free_usage = req.free_usage || 0;
         const { publish } = req.body;
@@ -246,7 +246,7 @@ export const resumeReview = async (req, res) => {
 
         // Extract text from the PDF
         
-        const pdfData = await parse(dataBuffer);
+        const pdfData = await pdf(dataBuffer);
 
         // FIX 3: Force Gemini to output strict JSON matching our React State
         const prompt = `

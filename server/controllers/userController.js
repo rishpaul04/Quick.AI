@@ -67,3 +67,23 @@ export const toggleLikeCreations = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+// Toggle Publish (Dashboard to Community)
+export const togglePublishCreation = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const { id, publish } = req.body; 
+
+        const [updated] = await sql`
+            UPDATE creations 
+            SET publish = ${publish} 
+            WHERE id = ${id} AND user_id = ${userId}
+            RETURNING *
+        `;
+
+        if (!updated) return res.status(404).json({ success: false, message: "Not found" });
+
+        res.json({ success: true, creation: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

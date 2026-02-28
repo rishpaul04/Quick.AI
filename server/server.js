@@ -1,9 +1,9 @@
-import express from 'express';
+import { clerkMiddleware, requireAuth } from '@clerk/express';
 import cors from 'cors';
 import 'dotenv/config';
-import { clerkMiddleware, requireAuth } from '@clerk/express';
-import aiRouter from './routes/airoutes.js'; 
+import express from 'express';
 import connectCloudinary from './configs/cloudinary.js';
+import aiRouter from './routes/airoutes.js';
 import userRouter from './routes/userRoutes.js';
 // Ensure casing matches your filename
 console.log("DEBUG CHECK:");
@@ -21,7 +21,7 @@ app.use(clerkMiddleware());
 // 2. API Routes (Mount these BEFORE the root/generic routes)
 // We apply requireAuth() specifically to this group
 app.use('/api/ai', requireAuth(), aiRouter);
-app.use('/api/user', requireAuth(), userRouter);
+app.use('/api/user', userRouter);
 
 // 3. Public/Root Routes (Generic fallback)
 app.get('/', (req, res) => {
