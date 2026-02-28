@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 // import { dummyCreationData } from '../assets/assets'; <--- 1. You can remove this now
-import { Gem, Sparkles } from 'lucide-react';
+import { Gem, Sparkles } from lucide-react;
 import { Protect, useAuth } from '@clerk/clerk-react'; // 2. Added useAuth
 import CreationItem from '../components/CreationItem';
 import axios from 'axios'; // 3. Import axios

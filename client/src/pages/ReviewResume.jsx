@@ -1,6 +1,6 @@
 import { useAuth } from '@clerk/clerk-react';
 import axios from 'axios';
-import { FileText, Loader2, Sparkles } from 'lucide-react';
+import { FileText, Loader2, Sparkles } from lucide-react;
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 

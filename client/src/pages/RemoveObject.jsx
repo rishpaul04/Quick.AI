@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, Scissors, Loader2, Download } from 'lucide-react';
+import { Sparkles, Scissors, Loader2, Download } from lucide-react;
 import axios from 'axios';
 import { useAuth } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';

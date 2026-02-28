@@ -1,4 +1,4 @@
-import { Edit, Sparkles, Loader2, Copy, Check } from 'lucide-react';
+import { Edit, Sparkles, Loader2, Copy, Check } from lucide-react;
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '@clerk/clerk-react';

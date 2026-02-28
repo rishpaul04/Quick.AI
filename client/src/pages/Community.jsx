@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Loader2 } from 'lucide-react';
+import { Heart, Loader2 } from lucide-react;
 import axios from 'axios';
 import { useAuth } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
