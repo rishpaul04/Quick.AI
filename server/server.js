@@ -14,7 +14,13 @@ const app = express();
 await connectCloudinary();
 
 // 1. Global Middleware
-app.use(cors());
+// Remove app.use(cors()); and use this instead:
+
+app.use(cors({
+  origin: "https://quick-ai-s88q.vercel.app/", // Replace this with your actual Vercel frontend link
+ 
+  credentials: true 
+}));
 app.use(express.json());
 app.use(clerkMiddleware()); 
 
