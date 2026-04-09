@@ -17,7 +17,7 @@ await connectCloudinary();
 // Remove app.use(cors()); and use this instead:
 
 app.use(cors({
-  origin: "https://quick-ai-s88q.vercel.app/", // Replace this with your actual Vercel frontend link
+  origin: "https://quick-ai-s88q.vercel.app", // Replace this with your actual Vercel frontend link
  
   credentials: true 
 }));
