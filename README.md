@@ -1,10 +1,4 @@
-Here is a clean, minimal, and highly professional version of your README. 
 
-I have removed all the badge images and external links to keep the focus entirely on your project and the setup instructions. 
-
-***
-
-```markdown
 # Quick.AI ⚡
 
 A full-stack, AI-powered platform for digital content creation and image manipulation. 
