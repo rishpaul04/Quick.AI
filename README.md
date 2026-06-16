@@ -109,5 +109,5 @@ npm start
 
 
 * **LinkedIn:** [linkedin.com/in/rishita-paul-45290026a]
-* **GitHub:** [Your GitHub Profile URL]
+
 
