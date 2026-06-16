@@ -1,80 +1,112 @@
+# Quick.AI: Full-Stack AI SaaS Platform
 
-# Quick.AI ⚡
+**Live Link:** [https://quick-ai-s88q.vercel.app](https://quick-ai-s88q.vercel.app)
+Quick.AI is a multi-feature Artificial Intelligence Software-as-a-Service (SaaS) platform. Designed with a focus on scalability and secure architecture, the platform integrates advanced generative capabilities into a cohesive web application. The system relies on a modern software engineering stack, utilizing robust RESTful APIs to facilitate communication between a dynamic frontend and an intelligent backend.
 
-A full-stack, AI-powered platform for digital content creation and image manipulation. 
+## ✨ System Features & Capabilities
 
-**Live Demo:** [https://quick-ai-s88q.vercel.app](https://quick-ai-s88q.vercel.app)
+### Core Infrastructure
 
-## Features
+* **Identity & Access Management:** Secure sign-in, sign-up, and comprehensive user profile management implemented via Clerk.
+* **Subscription Billing Model:** Integrated premium subscription tiers granting users access to advanced AI processing capabilities.
+* **Serverless Database Architecture:** Robust relational data storage powered by a serverless PostgreSQL database hosted on Neon.
 
-* **AI Text Generation:** Instantly create comprehensive articles and SEO-friendly blog titles using the Google Gemini API.
-* **Image Studio:** Generate custom AI images, isolate subjects with background removal, and seamlessly erase unwanted objects.
-* **Resume Review:** Receive automated, AI-driven feedback to optimize your professional resume.
-* **Secure Dashboard:** Authenticated user profiles (via Clerk) to safely store, view, and manage all generated content.
+### 🤖 AI-Powered Tools
+* **Article Generator:** Generates comprehensive, long-form articles based on user-provided titles and desired length specifications.
+* **Blog Title Generator:** Dynamically creates optimized blog titles based on targeted keywords and content categories.
+* **Image Generator:** Produces custom, high-quality images directly from user-defined text prompts.
+* **Background Remover:** Automatically processes uploaded images to strip backgrounds and deliver transparent image files.
+* **Image Object Remover:** Intelligently isolates and removes specific objects from uploaded images based on text descriptions.
+* **Resume Analyzer:** Parses and evaluates uploaded resumes to provide complete, AI-driven professional analysis and feedback.
 
-## Tech Stack
+## 🏗️ Technical Architecture
+Quick.AI is built upon a high-performance relational database architecture and a modular component design.
+### Application Stack
 
-* **Frontend:** React, Vite
-* **Backend:** Node.js, Express.js
-* **Database:** PostgreSQL (Hosted on Neon)
-* **Authentication:** Clerk
-* **Cloud & Media:** Cloudinary
-* **AI Integration:** Google Gemini API
+* **Frontend Interface:** React.js
+* **Backend Infrastructure:** Node.js, Express.js
+* **Database Management:** PostgreSQL hosted on Neon
+* **Authentication Provider:** Clerk Auth
+* **AI Integrations:** OpenAI API
 
-## Local Development
+## ⚙️ Local Development Setup
 
-Follow these steps to run the application locally.
+### System Prerequisites
+Ensure the following dependencies are installed in your local development environment:
+* Node.js (v16.x or later)
+* npm or yarn package manager
+* A provisioned Neon serverless PostgreSQL instance
+* Active API keys for OpenAI and Clerk
 
-### Prerequisites
-You will need Node.js installed, along with API keys for Clerk, Google Gemini, and Cloudinary. You will also need a PostgreSQL database connection string.
+### Installation Protocol
 
-### 1. Backend Setup
-Open a terminal and navigate to the `server` directory:
+**1. Clone the repository**
 
 ```bash
-cd server
+git clone https://github.com/yourusername/Quick.AI.git
+cd Quick.AI
+
+```
+**2. Initialize the Backend Services**
+
+```bash
+cd backend
 npm install
-```
 
-Create a `.env` file in the `server` directory:
-```env
-PORT=10000
-DATABASE_URL=your_postgres_connection_string
-CLERK_SECRET_KEY=your_clerk_secret_key
-CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
-GEMINI_API_KEY=your_google_gemini_key
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_cloudinary_api_key
-CLOUDINARY_API_SECRET=your_cloudinary_secret
-CLIENT_URL=http://localhost:3000
 ```
-
-Start the backend server:
-```bash
-npm start
-```
-
-### 2. Frontend Setup
-Open a new terminal window and navigate to the `client` directory:
+**3. Initialize the Frontend Interface**
 
 ```bash
-cd client
+cd ../frontend
 npm install
-```
 
-Create a `.env.local` file in the `client` directory:
+```
+**4. Environment Configuration**
+Create a `.env` file in the root of both the `frontend` and `backend` directories. Ensure all secrets are kept out of version control.
+
+*Backend (`/backend/.env`):*
+
 ```env
-VITE_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
-VITE_BASE_URL=http://localhost:10000
+PORT=5000
+DATABASE_URL=<your_neon_postgres_connection_string>
+OPENAI_API_KEY=<your_openai_api_key>
+CLERK_SECRET_KEY=<your_clerk_secret_key>
+STRIPE_SECRET_KEY=<your_stripe_secret_key> # If using Stripe for billing
+
 ```
 
-Start the frontend development server:
+*Frontend (`/frontend/.env`):*
+
+```env
+REACT_APP_CLERK_PUBLISHABLE_KEY=<your_clerk_publishable_key>
+REACT_APP_API_URL=http://localhost:5000
+
+```
+
+**5. Execute Development Servers**
+
+*Launch the backend API process:*
+
 ```bash
+cd backend
 npm run dev
+
 ```
 
-## Deployment Architecture
+*Launch the frontend client:*
 
-* **Frontend:** Deployed on Vercel. 
-* **Backend:** Deployed as a Web Service on Render, bound to `0.0.0.0` for public traffic with strict CORS policies applied.
+```bash
+cd frontend
+npm start
+
 ```
+## 📬 Contact & Maintainer
+
+**Rishita Paul**
+
+* **Email:** rishitapaul2812@gmail.com
+
+
+* **LinkedIn:** [linkedin.com/in/rishita-paul-45290026a]
+* **GitHub:** [Your GitHub Profile URL]
+
